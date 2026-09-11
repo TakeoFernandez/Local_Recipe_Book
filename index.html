@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Local C++ WebAssembly recipe discovery engine. Highly performant offline-first pantry matching.">
+  <title>BiteCraft WASM // High-Performance C++ Recipe Discovery</title>
+  
+  <!-- Modern Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons (CDN) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Custom stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background elements -->
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+  <div class="glow-orb orb-3"></div>
+
+  <!-- Header / Navigation -->
+  <header>
+    <div class="logo">
+      <span class="logo-accent">Bite</span>Craft <span class="badge-wasm">WASM</span>
+    </div>
+    <div class="header-actions">
+      <div class="status-badge" id="engine-status">
+        <i data-lucide="loader-2" class="spin"></i>
+        <span>Initializing C++ VM...</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero / Pantry Input Section -->
+    <section class="hero-section">
+      <h1 class="hero-title">High-Performance Local <span class="text-gradient">C++ Engine</span></h1>
+      <p class="hero-subtitle">Enter ingredients in your kitchen. WebAssembly executes your native C++ Inverted Index in-browser to rank matching gourmet recipes in under 1ms.</p>
+
+      <div class="pantry-card">
+        <div class="input-wrapper">
+          <i data-lucide="shopping-basket" class="input-icon"></i>
+          <input type="text" id="ingredient-input" placeholder="Type ingredient (e.g., garlic, chicken, butter) and press Enter..." autocomplete="off">
+          <button id="add-ingredient-btn" class="add-btn">
+            <i data-lucide="plus"></i>
+            <span>Add</span>
+          </button>
+        </div>
+
+        <!-- Ingredient tags container -->
+        <div class="tags-container" id="tags-container">
+          <p class="empty-tags-message">No ingredients added yet. Add some to search the local index!</p>
+        </div>
+
+        <div class="action-bar">
+          <button id="clear-all-btn" class="btn btn-secondary" disabled>
+            <i data-lucide="trash-2"></i>
+            <span>Clear Pantry</span>
+          </button>
+          <button id="find-recipes-btn" class="btn btn-primary" disabled>
+            <i data-lucide="cpu"></i>
+            <span>Search C++ Index</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results-section" class="results-section hidden">
+      <div class="section-header">
+        <h2 class="section-title">Matching Masterpieces</h2>
+        <div class="results-meta" id="results-meta">
+          <span class="meta-item" id="results-count">Analyzing ingredients...</span>
+          <span class="meta-badge" id="benchmark-time">0.00 ms</span>
+        </div>
+      </div>
+
+      <div class="recipe-grid" id="recipe-grid">
+        <!-- Dynamically populated cards -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Recipe Detail Modal -->
+  <div class="modal hidden" id="recipe-modal" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-content">
+      <button class="modal-close-btn" id="close-recipe-btn" aria-label="Close details">
+        <i data-lucide="x"></i>
+      </button>
+      <div id="recipe-modal-body">
+        <!-- Dynamically populated detail -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Load WebAssembly glue file -->
+  <script src="recipe_engine.js"></script>
+  
+  <!-- Frontend logic -->
+  <script>
+    // State management
+    const state = {
+      ingredients: [],
+      recipesMap: new Map(), // Master list of recipe records loaded from CSV
+      cppDb: null,           // Instance of our C++ RecipeDatabase class
+      isEngineReady: false
+    };
+
+    // DOM Elements
+    const ingredientInput = document.getElementById('ingredient-input');
+    const addIngredientBtn = document.getElementById('add-ingredient-btn');
+    const tagsContainer = document.getElementById('tags-container');
+    const clearAllBtn = document.getElementById('clear-all-btn');
+    const findRecipesBtn = document.getElementById('find-recipes-btn');
+    const resultsSection = document.getElementById('results-section');
+    const resultsCount = document.getElementById('results-count');
+    const benchmarkTime = document.getElementById('benchmark-time');
+    const recipeGrid = document.getElementById('recipe-grid');
+    const engineStatus = document.getElementById('engine-status');
+    const recipeModal = document.getElementById('recipe-modal');
+    const recipeModalBody = document.getElementById('recipe-modal-body');
+    const closeRecipeBtn = document.getElementById('close-recipe-btn');
+    const modalBackdrop = document.getElementById('modal-backdrop');
+
+    // Initialize WASM Module
+    Module.onRuntimeInitialized = async () => {
+      try {
+        console.log("C++ Engine loaded successfully via WebAssembly.");
+        state.cppDb = new Module.RecipeDatabase();
+        state.isEngineReady = true;
+
+        // Load CSV and load into C++ memory index
+        await loadRecipesFromCSV();
+        
+        // Update Status UI
+        engineStatus.className = "status-badge status-success";
+        engineStatus.innerHTML = '<i data-lucide="check-circle-2"></i><span>C++ Engine Loaded (WASM)</span>';
+        lucide.createIcons();
+      } catch (err) {
+        console.error("Failed to initialize C++ Engine:", err);
+        engineStatus.className = "status-badge status-error";
+        engineStatus.innerHTML = '<i data-lucide="alert-triangle"></i><span>Initialization Failed</span>';
+        lucide.createIcons();
+      }
+    };
+
+    // CSV Row Parser (handles standard comma separation)
+    function parseCSVLine(line) {
+      const result = [];
+      let cell = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(cell.trim());
+          cell = '';
+        } else {
+          cell += char;
+        }
+      }
+      result.push(cell.trim());
+      return result;
+    }
+
+    // Load CSV file and stream to C++ VM memory
+    async function loadRecipesFromCSV() {
+      try {
+        const response = await fetch('recipes.csv');
+        if (!response.ok) throw new Error("Could not fetch recipes.csv dataset.");
+        const text = await response.text();
+        const lines = text.split('\n').filter(Boolean);
+        
+        // Headers are on lines[0] -> id,title,instructions,ready_in_minutes,servings,ingredients...
+        for (let i = 1; i < lines.length; i++) {
+          const columns = parseCSVLine(lines[i]);
+          if (columns.length < 6) continue;
+
+          const id = parseInt(columns[0], 10);
+          const title = columns[1];
+          const instructions = columns[2];
+          const readyInMinutes = parseInt(columns[3], 10);
+          const servings = parseInt(columns[4], 10);
+          
+          // Ingredients are everything from index 5 onwards, or comma-joined
+          const ingredientsList = columns.slice(5).filter(Boolean);
+          const ingredientsCSV = ingredientsList.join(',');
+
+          // 1. Save in local JavaScript map for details rendering later
+          state.recipesMap.set(id, {
+            id,
+            title,
+            instructions,
+            readyInMinutes,
+            servings,
+            ingredients: ingredientsList
+          });
+
+          // 2. Stream directly to our custom C++ high-speed in-memory database
+          state.cppDb.add_recipe(
+            id,
+            title,
+            instructions,
+            readyInMinutes,
+            servings,
+            ingredientsCSV
+          );
+        }
+        console.log(`Loaded ${state.recipesMap.size} recipes directly into the C++ index.`);
+      } catch (err) {
+        console.error("Error loading CSV recipe dataset:", err);
+      }
+    }
+
+    // Add ingredient tag
+    function handleAddIngredient() {
+      const val = ingredientInput.value.trim().toLowerCase();
+      if (!val) return;
+
+      if (!state.ingredients.includes(val)) {
+        state.ingredients.push(val);
+        renderTags();
+        triggerSearch();
+      }
+      ingredientInput.value = '';
+      ingredientInput.focus();
+    }
+
+    // Render Tag elements
+    function renderTags() {
+      tagsContainer.innerHTML = '';
+      if (state.ingredients.length === 0) {
+        tagsContainer.innerHTML = '<p class="empty-tags-message">No ingredients added yet. Add some to search the local index!</p>';
+        clearAllBtn.disabled = true;
+        findRecipesBtn.disabled = true;
+        resultsSection.classList.add('hidden');
+        return;
+      }
+
+      state.ingredients.forEach((ing, idx) => {
+        const tag = document.createElement('div');
+        tag.className = 'tag';
+        tag.innerHTML = `
+          <span>${ing}</span>
+          <button onclick="removeIngredient(${idx})" aria-label="Remove ${ing}"><i data-lucide="x"></i></button>
+        `;
+        tagsContainer.appendChild(tag);
+      });
+
+      clearAllBtn.disabled = false;
+      findRecipesBtn.disabled = false;
+      lucide.createIcons();
+    }
+
+    // Remove ingredient tag
+    window.removeIngredient = function(index) {
+      state.ingredients.splice(index, 1);
+      renderTags();
+      if (state.ingredients.length > 0) {
+        triggerSearch();
+      }
+    }
+
+    // Clear pantry
+    function clearAllIngredients() {
+      state.ingredients = [];
+      renderTags();
+    }
+
+    // Trigger high-speed C++ search
+    function triggerSearch() {
+      if (!state.isEngineReady || state.ingredients.length === 0) return;
+
+      resultsSection.classList.remove('hidden');
+      recipeGrid.innerHTML = `
+        <div class="loading-wrapper" style="grid-column: 1 / -1;">
+          <div class="spinner"></div>
+          <p class="loading-label">Querying C++ Inverted Index...</p>
+        </div>
+      `;
+
+      // Formulate query string
+      const pantryCSV = state.ingredients.join(',');
+
+      // Benchmark C++ speed precisely
+      const t0 = performance.now();
+      
+      // CALL THE NATIVE C++ BINARY THROUGH WEB_ASSEMBLY!
+      const cppResultsVector = state.cppDb.search_pantry(pantryCSV);
+      
+      const t1 = performance.now();
+      const elapsed = (t1 - t0).toFixed(2);
+
+      // Extract results from custom C++ Vector to standard Javascript Array
+      const results = [];
+      for (let i = 0; i < cppResultsVector.size(); i++) {
+        results.push(cppResultsVector.get(i));
+      }
+
+      // Cleanup C++ vector from memory to avoid leakage
+      cppResultsVector.delete();
+
+      // Render cards
+      renderRecipes(results, elapsed);
+    }
+
+    // Render results
+    function renderRecipes(results, executionTime) {
+      recipeGrid.innerHTML = '';
+      benchmarkTime.textContent = `${executionTime} ms`;
+      
+      if (results.length === 0) {
+        recipeGrid.innerHTML = `
+          <div class="empty-results-wrapper" style="grid-column: 1 / -1;">
+            <i data-lucide="search" style="width: 48px; height: 48px; color: var(--text-muted);"></i>
+            <h4 style="font-family: var(--font-serif); font-size: 1.5rem; margin-top: 1rem; margin-bottom: 0.5rem;">No Matches Found</h4>
+            <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto;">No recipes contain those ingredients. Try adding simpler core ingredients like "garlic", "tomato", or "butter"!</p>
+          </div>
+        `;
+        resultsCount.textContent = 'Found 0 matches';
+        lucide.createIcons();
+        return;
+      }
+
+      resultsCount.textContent = `Displaying ${results.length} ranked matches`;
+
+      results.forEach(match => {
+        const recipeDetail = state.recipesMap.get(match.recipe_id);
+        const card = document.createElement('div');
+        card.className = 'recipe-card';
+        
+        const matchPercent = Math.round((match.matching_ingredients_count / (match.matching_ingredients_count + match.missing_ingredients_count)) * 100);
+
+        card.innerHTML = `
+          <div class="recipe-card-content">
+            <div class="card-header-row">
+              <span class="match-badge">${matchPercent}% Match</span>
+              <span class="time-badge"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${recipeDetail.readyInMinutes}m</span>
+            </div>
+            <h3 class="recipe-card-title">${recipeDetail.title}</h3>
+            
+            <div class="ingredients-preview">
+              <div class="ingredient-stat stat-success">
+                <i data-lucide="check-circle-2" style="width: 14px; height: 14px;"></i>
+                <span>${match.matching_ingredients_count} Matching</span>
+              </div>
+              <div class="ingredient-stat ${match.missing_ingredients_count === 0 ? 'stat-success' : 'stat-warning'}">
+                <i data-lucide="${match.missing_ingredients_count === 0 ? 'check-circle-2' : 'alert-circle'}" style="width: 14px; height: 14px;"></i>
+                <span>${match.missing_ingredients_count} Missing</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <span class="cta-link">View Recipe <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i></span>
+            </div>
+          </div>
+        `;
+
+        card.addEventListener('click', () => openRecipeDetails(match.recipe_id, match));
+        recipeGrid.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    // Modal details
+    function openRecipeDetails(recipeId, match) {
+      const recipe = state.recipesMap.get(recipeId);
+      recipeModalBody.innerHTML = `
+        <h2 class="modal-recipe-title">${recipe.title}</h2>
+        <div class="recipe-meta-strip">
+          <div class="meta-pill"><i data-lucide="clock"></i> Prep Time: ${recipe.readyInMinutes} mins</div>
+          <div class="meta-pill"><i data-lucide="users"></i> Servings: ${recipe.servings}</div>
+          <div class="meta-pill"><i data-lucide="cpu"></i> Memory Index ID: #${recipe.id}</div>
+        </div>
+        
+        <div class="modal-section">
+          <h3>Ingredients</h3>
+          <ul class="ingredients-list">
+            ${recipe.ingredients.map(ing => {
+              const isMatch = state.ingredients.some(p => ing.toLowerCase().includes(p) || p.includes(ing.toLowerCase()));
+              return `<li class="${isMatch ? 'ing-match' : 'ing-missing'}">
+                <i data-lucide="${isMatch ? 'check' : 'plus'}"></i>
+                <span>${ing}</span>
+              </li>`;
+            }).join('')}
+          </ul>
+        </div>
+        
+        <div class="modal-section">
+          <h3>Instructions</h3>
+          <p class="recipe-instructions">${recipe.instructions}</p>
+        </div>
+      `;
+
+      recipeModal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      lucide.createIcons();
+    }
+
+    function closeRecipeDetails() {
+      recipeModal.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    // Listeners
+    ingredientInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleAddIngredient();
+    });
+    addIngredientBtn.addEventListener('click', handleAddIngredient);
+    clearAllBtn.addEventListener('click', clearAllIngredients);
+    findRecipesBtn.addEventListener('click', triggerSearch);
+    closeRecipeBtn.addEventListener('click', closeRecipeDetails);
+    modalBackdrop.addEventListener('click', closeRecipeDetails);
+  </script>
+</body>
+</html>

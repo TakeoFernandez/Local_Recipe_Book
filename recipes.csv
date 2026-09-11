@@ -1,0 +1,11 @@
+id,title,instructions,ready_in_minutes,servings,ingredients
+1,Classic Tomato Pasta,Boil pasta. Sauté garlic and onions in olive oil. Add canned tomatoes and simmer. Mix with pasta and top with basil.,20,2,pasta,garlic,onion,olive oil,canned tomatoes,basil
+2,Garlic Butter Chicken,Season chicken breast with salt and pepper. Sauté garlic in butter. Pan-sear chicken until golden brown and cooked through. Serve hot.,25,3,chicken,garlic,butter,salt,pepper
+3,Simple Grilled Cheese,Spread butter on bread slices. Place cheese in between. Toast on a pan until bread is golden and cheese is melted.,10,1,bread,cheese,butter
+4,Caprese Salad,Slice fresh tomatoes and mozzarella. Layer them with basil leaves. Drizzle with olive oil and balsamic glaze.,10,2,tomatoes,mozzarella,basil,olive oil,balsamic glaze
+5,Garlic Bread,Mix softened butter with minced garlic and parsley. Spread on sliced bread and bake until golden brown.,15,4,bread,butter,garlic,parsley
+6,Tomato Basil Soup,Sauté onions and garlic in olive oil. Add canned tomatoes and vegetable broth. Simmer for 15 minutes and blend. Stir in fresh basil.,30,3,canned tomatoes,basil,onion,garlic,olive oil,vegetable broth
+7,Creamy Garlic Mushroom Pasta,Boil pasta. Sauté mushrooms and garlic in butter. Pour in heavy cream and simmer. Toss with cooked pasta and parsley.,20,2,pasta,mushrooms,garlic,butter,heavy cream,parsley
+8,French Onion Soup,Sauté sliced onions in butter until deeply caramelized. Add garlic and beef broth. Simmer for 30 minutes. Top with toasted bread and melted cheese.,45,4,onion,butter,garlic,beef broth,bread,cheese
+9,Classic Cheese Omelette,Whisk eggs with salt and pepper. Pour into a heated buttery pan. Add cheese in the middle and fold when cooked.,10,1,eggs,butter,cheese,salt,pepper
+10,Lemon Herb Chicken,Marinate chicken with lemon juice, olive oil, garlic, and parsley. Grill or pan-sear until fully cooked.,25,2,chicken,lemon juice,olive oil,garlic,parsley,salt,pepper
