@@ -10,12 +10,12 @@
   --primary-glow: rgba(59, 130, 246, 0.15);
   --success-glow: rgba(16, 185, 129, 0.15);
   --warning-glow: rgba(245, 158, 11, 0.15);
-  
+
   --accent: #3b82f6;
   --accent-hover: #60a5fa;
   --success: #10b981;
   --warning: #f59e0b;
-  
+
   --font-sans: 'Outfit', sans-serif;
   --font-serif: 'Playfair Display', Georgia, serif;
 }
@@ -134,8 +134,13 @@ header {
 }
 
 @keyframes spin-kf {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* --- Main Layout --- */
@@ -275,8 +280,15 @@ main {
 }
 
 @keyframes pop-in {
-  0% { transform: scale(0.9); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .tag button {
@@ -320,7 +332,8 @@ main {
   background: var(--accent-hover);
 }
 
-.btn-primary:disabled, .btn-secondary:disabled {
+.btn-primary:disabled,
+.btn-secondary:disabled {
   opacity: 0.4;
   cursor: not-allowed;
   pointer-events: none;
@@ -397,7 +410,7 @@ main {
   overflow: hidden;
   transition: all 0.3s ease;
   cursor: pointer;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
 }
@@ -490,7 +503,8 @@ main {
 }
 
 /* --- Loader / Spinner --- */
-.loading-wrapper, .empty-results-wrapper {
+.loading-wrapper,
+.empty-results-wrapper {
   text-align: center;
   padding: 4rem 2rem;
 }
@@ -547,14 +561,21 @@ main {
   position: relative;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
   animation: modal-slide 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 1001;
 }
 
 @keyframes modal-slide {
-  0% { transform: translateY(30px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
+  0% {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-close-btn {
