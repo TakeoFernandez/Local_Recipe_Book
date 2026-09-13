@@ -75,6 +75,10 @@
       <div class="section-header">
         <h2 class="section-title">Matching Masterpieces</h2>
         <div class="results-meta" id="results-meta">
+          <div class="filter-toggle-group" id="filter-toggle-group">
+            <button class="filter-toggle-btn active" id="filter-all-btn">All Matches</button>
+            <button class="filter-toggle-btn" id="filter-exact-btn">Must Match All</button>
+          </div>
           <span class="meta-item" id="results-count">Analyzing ingredients...</span>
           <span class="meta-badge" id="benchmark-time">0.00 ms</span>
         </div>
@@ -109,7 +113,10 @@
       ingredients: [],
       recipesMap: new Map(), // Master list of recipe records loaded from CSV
       cppDb: null,           // Instance of our C++ RecipeDatabase class
-      isEngineReady: false
+      isEngineReady: false,
+      filterMode: 'all',     // 'all' (ranked) or 'exact' (must contain all)
+      lastResults: [],
+      lastElapsed: '0.00'
     };
 
     // DOM Elements
@@ -127,6 +134,42 @@
     const recipeModalBody = document.getElementById('recipe-modal-body');
     const closeRecipeBtn = document.getElementById('close-recipe-btn');
     const modalBackdrop = document.getElementById('modal-backdrop');
+    const filterAllBtn = document.getElementById('filter-all-btn');
+    const filterExactBtn = document.getElementById('filter-exact-btn');
+
+    // Matching helpers
+    function stemEqual(a, b) {
+      if (a === b) return true;
+      if (a + 's' === b || a + 'es' === b) return true;
+      if (b + 's' === a || b + 'es' === a) return true;
+      if (a.endsWith('y') && a.slice(0, -1) + 'ies' === b) return true;
+      if (b.endsWith('y') && b.slice(0, -1) + 'ies' === a) return true;
+      return false;
+    }
+
+    function ingredientMatches(pantryItem, recipeIng) {
+      const p = pantryItem.toLowerCase().trim();
+      const r = recipeIng.toLowerCase().trim();
+      if (!p || !r) return false;
+      if (stemEqual(p, r)) return true;
+      const rWords = r.split(/\s+/);
+      const pWords = p.split(/\s+/);
+      if (pWords.length === 1) {
+        for (const rw of rWords) {
+          if (stemEqual(pWords[0], rw)) return true;
+        }
+      }
+      if (r.includes(p) || p.includes(r)) return true;
+      let allFound = true;
+      for (const pw of pWords) {
+        if (!rWords.some(rw => stemEqual(pw, rw))) {
+          allFound = false;
+          break;
+        }
+      }
+      if (allFound && pWords.length > 0) return true;
+      return false;
+    }
 
     // Initialize WASM Module
     Module.onRuntimeInitialized = async () => {
@@ -219,13 +262,22 @@
       }
     }
 
-    // Add ingredient tag
+    // Add ingredient tag (supports single or multiple comma/semicolon/newline-separated items)
     function handleAddIngredient() {
-      const val = ingredientInput.value.trim().toLowerCase();
-      if (!val) return;
+      const raw = ingredientInput.value.trim();
+      if (!raw) return;
 
-      if (!state.ingredients.includes(val)) {
-        state.ingredients.push(val);
+      const items = raw.split(/[,;\n]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+      let added = false;
+
+      for (const val of items) {
+        if (!state.ingredients.includes(val)) {
+          state.ingredients.push(val);
+          added = true;
+        }
+      }
+
+      if (added) {
         renderTags();
         triggerSearch();
       }
@@ -307,16 +359,53 @@
       // Cleanup C++ vector from memory to avoid leakage
       cppResultsVector.delete();
 
-      // Render cards
-      renderRecipes(results, elapsed);
+      state.lastResults = results;
+      state.lastElapsed = elapsed;
+
+      applyFilterAndRender();
+    }
+
+    window.setFilterMode = function(mode) {
+      state.filterMode = mode;
+      if (filterAllBtn && filterExactBtn) {
+        filterAllBtn.classList.toggle('active', mode === 'all');
+        filterExactBtn.classList.toggle('active', mode === 'exact');
+      }
+      applyFilterAndRender();
+    }
+
+    function applyFilterAndRender() {
+      let filtered = state.lastResults;
+      const totalPantry = state.ingredients.length;
+
+      if (state.filterMode === 'exact' && totalPantry > 1) {
+        filtered = state.lastResults.filter(match => match.matching_ingredients_count >= totalPantry);
+      }
+
+      renderRecipes(filtered, state.lastElapsed);
     }
 
     // Render results
     function renderRecipes(results, executionTime) {
       recipeGrid.innerHTML = '';
       benchmarkTime.textContent = `${executionTime} ms`;
-      
+      const totalPantry = state.ingredients.length;
+
       if (results.length === 0) {
+        if (state.filterMode === 'exact' && totalPantry > 1 && state.lastResults.length > 0) {
+          recipeGrid.innerHTML = `
+            <div class="empty-results-wrapper" style="grid-column: 1 / -1;">
+              <i data-lucide="info" style="width: 48px; height: 48px; color: var(--accent);"></i>
+              <h4 style="font-family: var(--font-serif); font-size: 1.5rem; margin-top: 1rem; margin-bottom: 0.5rem;">No Recipes Match All ${totalPantry} Ingredients</h4>
+              <p style="color: var(--text-secondary); max-width: 460px; margin: 0 auto 1.5rem auto;">None of our recipes require every single one of your entered ingredients together. Switch to "All Matches" to see recipes using the best combinations!</p>
+              <button class="btn btn-secondary" onclick="setFilterMode('all')">View Closest Matches</button>
+            </div>
+          `;
+          resultsCount.textContent = '0 exact matches';
+          lucide.createIcons();
+          return;
+        }
+
         recipeGrid.innerHTML = `
           <div class="empty-results-wrapper" style="grid-column: 1 / -1;">
             <i data-lucide="search" style="width: 48px; height: 48px; color: var(--text-muted);"></i>
@@ -336,12 +425,17 @@
         const card = document.createElement('div');
         card.className = 'recipe-card';
         
-        const matchPercent = Math.round((match.matching_ingredients_count / (match.matching_ingredients_count + match.missing_ingredients_count)) * 100);
+        const totalRecipeIngs = match.matching_ingredients_count + match.missing_ingredients_count;
+        const matchPercent = Math.round((match.matching_ingredients_count / totalRecipeIngs) * 100);
+        const isAllPantryMatched = totalPantry > 1 && match.matching_ingredients_count >= totalPantry;
 
         card.innerHTML = `
           <div class="recipe-card-content">
             <div class="card-header-row">
-              <span class="match-badge">${matchPercent}% Match</span>
+              ${isAllPantryMatched ? 
+                `<span class="match-badge match-badge-all"><i data-lucide="sparkles" style="width: 12px; height: 12px;"></i> All ${totalPantry} Matched</span>` :
+                `<span class="match-badge">${matchPercent}% Match (${match.matching_ingredients_count}/${totalPantry})</span>`
+              }
               <span class="time-badge"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${recipeDetail.readyInMinutes}m</span>
             </div>
             <h3 class="recipe-card-title">${recipeDetail.title}</h3>
@@ -349,7 +443,7 @@
             <div class="ingredients-preview">
               <div class="ingredient-stat stat-success">
                 <i data-lucide="check-circle-2" style="width: 14px; height: 14px;"></i>
-                <span>${match.matching_ingredients_count} Matching</span>
+                <span>${match.matching_ingredients_count} of ${totalPantry} in Pantry</span>
               </div>
               <div class="ingredient-stat ${match.missing_ingredients_count === 0 ? 'stat-success' : 'stat-warning'}">
                 <i data-lucide="${match.missing_ingredients_count === 0 ? 'check-circle-2' : 'alert-circle'}" style="width: 14px; height: 14px;"></i>
@@ -384,7 +478,7 @@
           <h3>Ingredients</h3>
           <ul class="ingredients-list">
             ${recipe.ingredients.map(ing => {
-              const isMatch = state.ingredients.some(p => ing.toLowerCase().includes(p) || p.includes(ing.toLowerCase()));
+              const isMatch = state.ingredients.some(p => ingredientMatches(p, ing));
               return `<li class="${isMatch ? 'ing-match' : 'ing-missing'}">
                 <i data-lucide="${isMatch ? 'check' : 'plus'}"></i>
                 <span>${ing}</span>
@@ -416,6 +510,8 @@
     addIngredientBtn.addEventListener('click', handleAddIngredient);
     clearAllBtn.addEventListener('click', clearAllIngredients);
     findRecipesBtn.addEventListener('click', triggerSearch);
+    if (filterAllBtn) filterAllBtn.addEventListener('click', () => setFilterMode('all'));
+    if (filterExactBtn) filterExactBtn.addEventListener('click', () => setFilterMode('exact'));
     closeRecipeBtn.addEventListener('click', closeRecipeDetails);
     modalBackdrop.addEventListener('click', closeRecipeDetails);
   </script>
